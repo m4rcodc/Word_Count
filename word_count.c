@@ -685,7 +685,7 @@ Cosa fa il [MASTER]:
     finish_time = MPI_Wtime();
 
     if(rank == 0){
-        printf("%f \n",finish_time - start_time);
+        printf("Time:%f with %d processors\n",finish_time - start_time, world_size);
         fflush(stdout);
     }
 
