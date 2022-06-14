@@ -235,7 +235,7 @@ Il metodo addOrIncrementInMaster prende in input una parola e capisce se il mast
 
 Per dimostrare la correttezza dell'algoritmo sono state effettuate tre esecuzioni, dove in ognuna di esse è stato cambiato il numero di processi coinvolti. Come si può osservare dalle immagini sottostanti, nonostante la variazione del numero di processi vengono prodotti sempre gli stessi risultati.
 
-*File di input - Numero Processi = 1*          | *File di output - Numero Processi = 2*
+*File di input - Numero Processi = 1*          | *File di output - Numero Processi = 1*
 :-------------------------:|:-------------------------:
 ![inFile](Correttezza/Input1Processo.png)      | ![outFile](Correttezza/Output1Processo.png)
 
