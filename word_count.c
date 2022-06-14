@@ -161,7 +161,7 @@ MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
 start_time = MPI_Wtime();
 
-//Array [All_Gather e Ghaterv]
+//Array [Gather e Ghaterv]
 int recv_all_num_char[world_size];
 int result_word_disp[world_size];
 int total_counters_disp[world_size];
@@ -512,6 +512,7 @@ Cosa fa il [MASTER]:
         }
         else {
             total_counters_disp[i] = total_counters_disp[i-1] + recvs_allFreq_ndWord[i-1];
+            printf("%d\n",total_counters_disp[i]);
         }
         num_count += recvs_allFreq_ndWord[i];
     }
@@ -531,20 +532,20 @@ Cosa fa il [MASTER]:
         result_word = malloc(sizeof(char)* num);
         total_counters = malloc(sizeof(int)*num_count);
 
-
+        //Invio a tutti gli altri processi i displacement calcolati per i due array (result_word e total_counters)
         MPI_Bcast(&total_counters_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
         MPI_Bcast(&result_word_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
         
     }
 
-
     MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,recv_all_num_char,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);
     MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,recvs_allFreq_ndWord,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
     
-  if(rank != 0) {
-        free(histogram_word);
-        free(counters);    
-    }
+
+    if(rank != 0) {
+            free(histogram_word);
+            free(counters);    
+        }
 
     /*
     -------------------------------------------------[MASTER] Merge finale degli istogrammi--------------------------------------------
@@ -566,10 +567,10 @@ Cosa fa il [MASTER]:
                 
                 addOrIncrWordInMaster(tmp_word,total_counters[count_parole]);//addOrIncrementWordInMaster è un metodo esclusivo del master, se il master ha già quella parola somma la sua occorrenza con quella dello slave, se non ce l'ha usa come conteggio quello rilevato dagli slave che hanno quella parola
                 /*
-                [DEBUG]: per vedere il counter associato ad ogni word
+                [DEBUG]: print del counter associato ad ogni word
                 printf("%d\n",total_counters[count_parole]);
                 */
-               memset(tmp_word,0,100);//Una volta verificata la word resetto l'array tmp_word, e l'indice index_of_word_count
+                memset(tmp_word,0,100);
                 index_of_word_count = 0;
                 count_parole++;
             }
@@ -585,6 +586,7 @@ Cosa fa il [MASTER]:
         pStruct = pStart;
         FILE *file;
         file = fopen("result_word_frequency.csv","w+");
+        fprintf(file,"Execution with %d processes\n", world_size);
 
         while(pStruct != NULL){
             fprintf(file,"WORD: %s --- FREQ: %d\n", returnWord(pStruct),returnWordFrequency(pStruct));
@@ -602,7 +604,7 @@ Cosa fa il [MASTER]:
     MPI_Barrier(MPI_COMM_WORLD);
     finish_time = MPI_Wtime();
 
-    /*Qui stampo il tempo finale di esecuzione*/
+    /*Tempo finale di esecuzione*/
     if(rank == 0){
         printf("Time %f with %d processors \n",finish_time - start_time,world_size);
         fflush(stdout);
