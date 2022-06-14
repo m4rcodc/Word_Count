@@ -1,5 +1,8 @@
 # MPI WORD_COUNT PCPC PROJECT 2021/2002
-Reallizzato da: Delle Cave Marco
+
+|Studente|Matricola|Numero Progetto|
+|:---:|:---:|:---:|
+|**Marco Delle Cave**|0522501162|01162 % 5 = 2|
 
 # Problem Statement
 Il problema Word_Count consiste nel leggere un numero casuale di parole all'interno di un numero variabile di file, con lo scopo di contare quante volta una singola parola si ripete all'interno dello stesso file e tra più file. Nello specifico, il tutto si realizza attraverso i principi della programmazione parallela, quindi ogni processo coinvolto ha una porzione di file da analizzare, per poi comunicare il proprio risultato ad un singolo processo MASTER.
@@ -52,7 +55,7 @@ void addOrIncrWordInMaster(char *word, int count);
 
 **La sezione seguente illustrerà le soluzioni ai tre sottoproblemi descritti sopra:**
 
-#Partizionamento
+# Partizionamento delle word
 La prima cosa di cui abbiamo bisogno è sapere il numero totale di parole nell'insieme di file. Per fare ciò è stata fatta una lettura all'interno di ogni singolo file, aggiornando un counter per ogni parola trovata. Ogni parola termina alla presenza di un \n, \t ecc.
 
 **Partizionamento [MASTER]**
@@ -61,3 +64,293 @@ Dopo aver calcolato la partizione per ciascun processo, il master invia agli sla
 A questo punto il master inizia il lavoro sulla propria partizione. D'ora in poi possono verificarsi due casi:
 1)Il primo file ha meno parole della partizione, quindi è necessario leggerlo tutto e continuare con il file successivo.
 2)Il primo file ha più parole della sua partizione, quindi è necessario leggere al massimo un numero di parole pari alla partizione.
+
+**Partizionamento [SLAVE]**
+Per quanto riguarda gli slave è necessario indicargli anche la parola da cui devono iniziare ad eseguire il conteggio. Di conseguenze occorre capire da quale file leggere e da quale posizione all'interno di quest'ultimo partire con il conteggio, poichè il processo precedente potrebbe non aver letto tutto il file, ma solo una piccola parte.
+Per questo motivo ogni slave calcola il proprio lowerbound, ovvero da quale parole dovrebbe iniziare a leggere. Questa operazione è stata fatta attraverso semplici calcoli:
+
+```
+ if(resto != 0){ 
+            if(rank < resto){
+                lw_bound = (partition + 1) * rank;
+                partition++;
+            }
+            else {
+                lw_bound = (partition*rank) + resto;
+            }
+        } else { 
+            lw_bound = partition * rank;
+        }
+
+```
+Una volta calcolato il proprio lowerbound, ogni slave sa esattamente la posizione esatta da cui iniziare il proprio conteggio.
+Ci sono diversi steps:
+1) Occorre identificare esattamente quale file leggere. Per farlo si è fatto uso di una variabile che viene incrementata del numero di parole nell'i-esimo file nel ciclo. Quando questa variabile supera il lowerbound calcolato, allora può iniziare il conteggio.
+
+```
+int size = sizeof(number_of_word)/sizeof(number_of_word[0]);
+
+for(int i=0; i < size; i++){
+
+  cum_sum += number_of_word[i];
+
+   if((cum_sum > lw_bound) && (partition > 0)){
+     ...
+
+    //Questo è il file che stiamo cercando     
+     ...
+  
+   }
+}
+
+```
+2) Una volta trovato il file da cui iniziare il conteggio, occorre capire se questo file è stato letto per intero dal processo precedente o contiene ancora parola da leggere. Per fare ciò si utilizza una variabile "start", il cui valore si ottiene sottraendo al numero di parole contenute nel file corrente, la differenza tra la somma cumulativa di parole tra i vari file e il lowerbound. La variabile start può assumere due valori: se è minore di 0, significa che il file corrente deve essere letto dall'inizio, altrimenti il suo risultato è esattamente il punto da cui iniziare la lettura. Ad esempio, se start è pari a 100, il processo p inizierà a leggere dalla 101-esima parola.
+
+```
+start_to_read = number_of_word[i] - (cum_sum-lw_bound);
+            
+            if(start_to_read < 0){
+                        start_to_read = 0;
+                    }
+            ...
+
+
+
+```
+
+# Conteggio locale delle parole
+
+La soluzione che si è deciso di utilizzare per il conteggio delle parole è abbastanza semplice, ovvero ogni volta che viene raggiunta la fine di una parola, quest'ultima viene copiata all'interno di un array temporaneo per poi essere aggiunta alla linked list (se non già presente al suo interno). Ad ogni parola trovata l'array viene ripristinato in modo tale da essere riutilizzato per la parola successiva.
+
+```
+else {
+    if((ch == ' ' || ch == '\t' || ch == '\n') && (flag_in_word==1)){
+       
+       //Una volta raggiunta la fine di una parola
+       
+       word_counter++;
+       flag_in_word=0;                                
+       if(word_counter > start_to_read){
+             partition--;
+             temporary_word[index_of_tmpword] = '\0';
+             index_of_tmpword++;
+             addWordToList(temporary_word);
+             memset(temporary_word,0,100);
+             index_of_tmpword = 0;
+       }                            
+        
+        if(partition <= 0){
+              break;
+        }
+    }
+}
+
+
+```
+A questo punto ogni processo ha generato il proprio istogramma locale ed è pronto per comunicarlo al master (comunicare le parole e le relative frequenze al master).
+
+# Comunicazione degli istogrammi locali al MASTER
+
+Per consentire ad ogni processo slave di comunicare il proprio istogramma (linked list) al master, l'approccio che ho utilizzato è quello di inserire all'interno di un array abbastanza ampio l'insieme di tutte le parole rilevate da ciascun processo, ognuna di esse separata dal carattere \0. Lo stesso principio è stato applicato per le frequenze relative ad ogni parola, al fine di sincronizzare i due array nel processo master e dunque riuscire a ricostruire la linked list.
+
+```
+//Array contenente le frequenze associate a ciascuna word
+
+readed_non_duplicate_words = counter_non_duplicate_words();
+counters = malloc(sizeof(int)*readed_non_duplicate_words);
+
+//Array contenente tutte le parole presenti in ogni istogramma locale dei processi slave
+
+pStruct = pStart;
+        while(pStruct != NULL){
+            readed_num_char += lengthOfCurrentWord(pStruct);
+            pStruct = pStruct -> pNext;
+            fflush(stdout);
+        }
+histogram_word = calloc(readed_num_char,sizeof(char));
+
+```
+Ora possiamo iniziare la comunicazione con il master, per fare ciò ho utilizzato una Gatherv, per la quale ho calcolato i due parametri necessari a questa funzione, i displacement e la size, sia per l'array counters delle frequenze, sia per l'array histogram_word per le parole.
+N.B. il master non partecipa al calcolo dei due parametri, quindi quest'ultimi sono stati settati a 0.
+
+```
+for (int i = 0; i < world_size; i++){
+        
+        rcv_count_tcounters[i] = recvs_allFreq_ndWord[i];
+        if(i == 0){
+            total_counters_disp[i] = 0;
+        }
+        else {
+            total_counters_disp[i] = total_counters_disp[i-1] + rcv_count_tcounters[i-1];
+        }
+        num_count += rcv_count_tcounters[i];
+        }
+
+for (int i = 0; i < world_size; i++){
+        
+        rcv_count_rword[i] = recv_all_num_char[i];
+        if(i == 0){
+            result_word_disp[i] = 0;
+        }
+        else {
+            result_word_disp[i] = result_word_disp[i-1] + rcv_count_rword[i-1];
+        }
+        num += rcv_count_rword[i];
+        }
+
+```
+Ora può avere inizio la comunicazione:
+
+```
+MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,rcv_count_rword,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);
+
+MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,rcv_count_tcounters,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
+
+```
+# Merge dei risultati all'interno dell'istogramma del MASTER
+
+Avendo a disposizione gli istogrammi locali di ogni processo slave, a questo punto è possibile ricostruire la linked list e fare il merge con quella del master.
+
+```
+for(int n = 0; n < num; n++){
+          if(result_word[n] == 0){
+                
+            addOrIncrWordInMaster(tmp_word,total_counters[count_parole]);
+            memset(tmp_word,0,100);//Una volta verificata la word resetto l'array tmp_word, e l'indice index_of_word_count
+            index_of_word_count = 0;
+            count_parole++;
+            }
+          else 
+            {
+            tmp_word[index_of_word_count] = result_word[n];
+            index_of_word_count++;
+            }
+        }
+
+```
+Il metodo addOrIncrementInMaster prende in input una parola e capisce se il master la possiede già all'interno del suo istogramma, se è cosi allora somma la sua frequenza relativa a quella parola con quella dello slave, prelevando la frequenza dall'array dei conteggi. Viceversa, se il MASTER non possiede la parola, la deve aggiungere al proprio istogramma inserendo come frequenza quella rilevata localmente dagli slave.
+
+
+# Correttezza
+
+Per dimostrare la correttezza dell'algoritmo sono state effettuate tre esecuzioni, dove in ognuna di esse è stato cambiato il numero di processi coinvolti. Come si può osservare dalle immagini sottostanti, nonostante la variazione del numero di processi vengono prodotti sempre gli stessi risultati.
+
+*File di input - Numero Processi = 1*          | *File di output - Numero Processi = 2*
+:-------------------------:|:-------------------------:
+![inFile](Correttezza/Input1Processo.png)      | ![outFile](Correttezza/Output1Processo.png)
+
+*File di input - Numero Processi = 3*          | *File di output - Numero Processi = 3*
+:-------------------------:|:-------------------------:
+![inFile](Correttezza/Input3Processi.png)      | ![outFile](Correttezza/Output3Processi.png)
+
+*File di input - Numero Processi = 5*          | *File di output - Numero Processi = 5*
+:-------------------------:|:-------------------------:
+![inFile](Correttezza/Input5Processi.png)      | ![outFile](Correttezza/Output5Processi.png)
+
+# Benchmarking
+
+L'algoritmo è stato testato in termini di **strong scalability** e **weak scalability** su **Google Cloud Platform** su un cluster di 6 macchine **e2-standard-4**, ognuna dotata di 4 vCPUs e 16GB di memoria RAM, quindi per un totale di 24 vCPUs.
+
+⚠️ **IMPORTANTE: il tempo rappresentato all'interno dei grafici sottostanti non considera la parte intera, che è pari a 0 per ogni risultato otteuto**
+
+# Strong Scalability - 500k words
+
+|vCPUs|Tempo(s)|Speed-up|
+|:---:|:---:|:---:|
+|1|0.438|1|
+|2|0.321|1.36|
+|3|0.292|1.5|
+|4|0.283|1.54|
+|5|0.286|1.53|
+|6|0.265|1.65|
+|7|0.243|1.80|
+|8|0.247|1.77|
+|9|0.230|1,90|
+|10|0.219|2|
+|11|0.206|2.12|
+|12|0.198|2.21|
+|13|0.192|2.28|
+|14|0.189|2.31|
+|15|0.194|2.25|
+|16|0.172|2.54|
+|17|0.168|2.60|
+|18|0.188|2.46|
+|19|0.204|2.14|
+|20|0.200|2.19|
+|21|0.226|1.93|
+|22|0.234|1.87|
+|23|0.231|1.89|
+|24|0.254|1.72|
+
+
+![Strong.png](Benchmark/Strong.png)
+
+
+Il benchmark mostra che più processi vengoo utilizzati, minore è il tempo necessario per completare il task. Da un certo punto in poi la riduzione del tempo di esecuzione inizia a diminuire, in particolare da 18 processi in su inizia a risalire, il chè significa che la velocità dell'algoritmo non riesce a sopperire l'overhead causato dalla comunicazione tra i vari processi.
+
+# Weak Scalability
+
+Le parole in input a ciascun processo hanno un rapporto di 15000:1.
+|vCPUs|Tempo(s)|N-Words|
+|:---:|:---:|:---:|
+|1|0.011|15k|
+|2|0.016|30k|
+|3|0.029|45k|
+|4|0.034|60k|
+|5|0.054|75k|
+|6|0.063|90k|
+|7|0.065|105k|
+|8|0.086|120k|
+|9|0.091|135k|
+|10|0.093|150k|
+|11|0.106|165k|
+|12|0.118|180k|
+|13|0.120|195k|
+|14|0.125|210k|
+|15|0.131|225k|
+|16|0.149|240k|
+|17|0.151|255k|
+|18|0.158|270k|
+|19|0.159|285k|
+|20|0.164|300k|
+|21|0.176|315k|
+|22|0.177|330k|
+|23|0.180|345k|
+|24|0.187|360k|
+
+
+![Weak.png](Benchmark/Weak.png)
+
+Come si può evincere dai risultati raccolti, il tempo di esecuzione aumenta (anche se di poco) costantemente all'aumentare del numero dei processori.
+
+# Istruzioni per l'esecuzione
+
+⚠️ **Per eseguire il programma la directory file_test deve essere posizionata all'interno della stessa directory in cui si trova il file .c**
+
+
+    📁 Word_Count    
+        📝 word_count.c
+            📁 file_test
+             📝 file1.txt
+             📝 file2.txt
+                ....
+
+Compilazione:
+```
+mpicc word_count.c -o word_count
+
+```
+
+Esecuzione locale:
+```
+mpirun --allow-run-as-root <np> word_count
+
+```
+
+Esecuzione sul cluster:
+```
+mpirun --allow-run-as-root <np> --hostfile <host> word_count
+
+```
+Occorre sostituire **np** con il numero di processori da utilizzare e
+**host** con il path dell'hostfile.
