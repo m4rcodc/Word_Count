@@ -44,12 +44,6 @@ struct Word* createWord(char *word, int number)
     return pStruct;
 }
 
-//Stampa i campi [WORD,FREQUENCY] di un determinato nodo 
-void showStructInfo(struct Word *pWord,int rank)
-{
-    printf("\n (RANK %d): %s   %d", rank, pWord -> word, pWord -> word_frequency);
-}
-
 //Aggiungi una word alla lista o aggiornala se già esiste all'interno della lista
 void addWordToList(char *word)
 {
@@ -211,7 +205,7 @@ Cosa fa il [MASTER]:
 
         int number_of_word[numberOfFile];//Countero il numero di parole per ogni file
         char file_name[numberOfFile][100];//Ogni riga dell'array bidimensionale è un array di char di dimensione 100
-        int while_counter = 0, flag_in_word = 0;
+        int while_counter = 0;
 
         /*
         Inizio del conteggio del numero di parole in ciascun file
@@ -238,18 +232,12 @@ Cosa fa il [MASTER]:
                     
                     while((ch = fgetc(fp)) != EOF){
                         //Controllo se il carattere letto è alfanumerico
-                        if(isalnum(ch)!=0){
-                            flag_in_word = 1;
-                            
-                        }
-                        else{
-                            if((ch == ' ' || ch == '\t' || ch == '\n') && (flag_in_word==1)){
+                            if(ch == ' ' || ch == '\t' || ch == '\n'){
                                 single_file_word_counter++;//Tengo traccia del numero totale di parole in un singolo file
-                                word_counter++;//Tengo traccia del numero totale di parole in tutti i file
-                                flag_in_word=0;
+                                word_counter++;//Tengo traccia del numero totale di parole in tutti i files
                             }
                         } 
-                    }
+                    
                     //printf("\n");
                     number_of_word[while_counter] = single_file_word_counter;
                     while_counter++;
@@ -264,8 +252,6 @@ Cosa fa il [MASTER]:
                 /*
                 Fine del conteggio del numero di parole in ciascun file all'interno della directory
                 */
-
-    
 
     //Suddivisione del numero totale di word in partizioni
 
@@ -283,7 +269,6 @@ Cosa fa il [MASTER]:
 
     }
 
-
     //Gestione dell'eventuale resto, per capire quanto deve essere grande la partizione su cui deve lavorare
     if(resto != 0){
          lw_bound = 0; //Setto il lower_bound per il master (sempre 0)
@@ -295,7 +280,6 @@ Cosa fa il [MASTER]:
 
 
     int index_file = 0;//variabile che mi serve per passare da un file ad un altro, se la partizione copre due file
-    flag_in_word=0;
     word_counter=0;
     char f_path[800];
 
@@ -316,15 +300,13 @@ Cosa fa il [MASTER]:
 
         //Lettura di una singola parola
         while((ch = fgetc(fp)) != EOF){
-            if(isalnum(ch)!=0){
-                flag_in_word=1;
-                ch = tolower(ch);
+           if(isalnum(ch) != 0){
                 temporary_word[index_of_tmpword] = ch;//Aggiungo in temporary_word la word corrente
                 index_of_tmpword++;
-            } else {
-                if((ch == ' ' || ch == '\t' || ch == '\n') && (flag_in_word==1)){
+            }
+             else {
+                if(ch == ' ' || ch == '\t' || ch == '\n'){ //Ho trovato la fine della parola
                     word_counter++;
-                    flag_in_word=0;
                     local_partition--;//ho trovato la parola, decremento il counter della partition
                     temporary_word[index_of_tmpword] ='\0';//Aggiungo il carattere di fine stringa
                     index_of_tmpword++;
@@ -335,27 +317,15 @@ Cosa fa il [MASTER]:
                     if(local_partition <= 0){
                         break;
                     }
-                    
                 }
             }
+
         }
 
         fclose(fp);
         memset(f_path,0,800);
         index_file++;//Se sono arrivato ad EOF ed ancora non ho terminato la mia partizione, inizio a leggere nel file successivo.
-    }
-
-   /*
-
-    [DEBUG MASTER] -> Stampa di tutte le parole della partizione del master
-
-    pStruct = pStart;
-    while(pStruct != NULL){
-        showStructInfo(pStruct,rank);
-        pStruct = pStruct -> pNext;
-    }
-    printf("\n \n \n");
-    */
+      }
     } 
 
     /*
@@ -370,7 +340,7 @@ Cosa fa il [MASTER]:
     else {
 
         FILE *file;
-        int cum_sum = 0,start_to_read = 0,flag_in_word = 0;
+        int cum_sum = 0,start_to_read = 0;
         int while_counter = 0;
 
         MPI_Recv(&numberOfFile,1,MPI_INT,0,99,MPI_COMM_WORLD,&status);//Ricevo il numero di file
@@ -427,21 +397,17 @@ Cosa fa il [MASTER]:
                     */
                     while((ch = fgetc(file)) != EOF){
                         if(isalnum(ch)!=0){
-                            flag_in_word = 1;
                             /*
                             Quando arrivo alla 27-esima parola di test1.txt inizio ad inserire nell'array temporaneo, in questo modo rank 1 inizierà a leggere le parole a partire dalla 27 esima
                             */
                             if(word_counter >= start_to_read){//Questo if mi fa arrivare al punto preciso da cui devo iniziare a leggere
-                                ch = tolower(ch);
                                 temporary_word[index_of_tmpword] = ch;
-                                index_of_tmpword++;
-                               
+                                index_of_tmpword++;      
                             }
                         }
                         else {
-                            if((ch == ' ' || ch == '\t' || ch == '\n') && (flag_in_word==1)){
+                            if(ch == ' ' || ch == '\t' || ch == '\n'){
                                 word_counter++;
-                                flag_in_word=0;
                                 //Dal momento in cui lo slave arriva al punto da cui deve iniziare a leggere, per ogni parola letta decrementa la sua partizione
                                 if(word_counter > start_to_read){
                                     partition--;
@@ -449,8 +415,7 @@ Cosa fa il [MASTER]:
                                     index_of_tmpword++;
                                     addWordToList(temporary_word);
                                     memset(temporary_word,0,100);
-                                    index_of_tmpword = 0;
-                                   
+                                    index_of_tmpword = 0;    
                                 }
                                 //Quando ho terminato di leggere la mia partizione esco
                                 if(partition <= 0){
@@ -510,20 +475,9 @@ Cosa fa il [MASTER]:
             histogram_word[index_histogram_word] = 0;
             index_histogram_word++;
             
-            //printf("[RANK %d] Counters di %d è uguale a %d\n",rank,x,counters[x]);
         }
 
-/*
-        [DEBUG SLAVE] -> Stampa di tutte le parole della partizione degli slave
-        pStruct = pStart;
-
-        while(pStruct != NULL){
-            showStructInfo(pStruct,rank);
-            pStruct = pStruct -> pNext;
-        }
-        printf("\n \n \n");
-*/
-        //Dealloco gli istogrammi di ogni slave
+        //Dealloco lo spazio allocato in precedenza per l'istogramma [PER OGNI SLAVE]
         pStruct = pStart;
         while(pStruct != NULL)
         {
@@ -533,101 +487,64 @@ Cosa fa il [MASTER]:
             free(pStart);
         }
        
-    } 
+    }
 
     /*
     --------------------------------------------------------  FINE CODICE SLAVE  ------------------------------------------------------------------
-    */
-
-    //Tutti inviano a tutti il proprio numero di caratteri letti ed il proprio numero di parole lette non duplicate a tutti gli altri (il processo 0 non partecipa alla allgather, infatti inserisce 0 in entrambi gli array)
-    //Inserisco in due unici array comuni a tutti i processi tutte le parole non duplicate lette e le corrispettive frequenze.
-    MPI_Allgather(&readed_num_char,1,MPI_INT,&recv_all_num_char,1,MPI_INT,MPI_COMM_WORLD);//numero di caratteri letti
-    MPI_Allgather(&readed_non_duplicate_words,1,MPI_INT,&recvs_allFreq_ndWord,1,MPI_INT,MPI_COMM_WORLD);//numero di conteggi delle parole (non duplicate)
-
+    */   
     
     /*
-                                 [PER DEBUG]
-    printf("num car after allgather %d\n",recv_all_num_char[1]);
-    printf("readed non duplicate word after allgather %d\n",recvs_allFreq_ndWord[1]);
+    -------------------------------------------------------- COMUNICAZIONE RISULTATI AL MASTER ----------------------------------------------------
     */
+    //Mi serve per allocare spazio per gli array finali contenenti tutti gli istogrammi degli slave con le relative freqenze associate alle parole.
+    MPI_Gather(&readed_num_char,1,MPI_INT,&recv_all_num_char,1,MPI_INT,0,MPI_COMM_WORLD);//numero di caratteri letti
+    MPI_Gather(&readed_non_duplicate_words,1,MPI_INT,&recvs_allFreq_ndWord,1,MPI_INT,0,MPI_COMM_WORLD);//numero di conteggi delle parole (non duplicate)
 
-
-    //[COMUNICAZIONE DEL RISULTATO AL MASTER] -> Preparazione parametri per la Gatherv
-    int rcv_count_rword [world_size];
-    int rcv_count_tcounters [world_size];
     int num_count = 0;
     int num = 0;
+    
+    if(rank == 0){
 
-
-    /*
-    Preparazione parametri per l'array total_counters
-    N.B: il master non partecipa al calcolo del displacement e della size quindi si pongono i relativi valori a 0
-    */
-    for (int i = 0; i < world_size; i++){
-        
-        rcv_count_tcounters[i] = recvs_allFreq_ndWord[i];
-        
+        for (int i = 0; i < world_size; i++){
         //Il processo 0 setta i suoi parametri a 0 poichè non partecipa al calcolo del displacement e di size
         if(i == 0){
             total_counters_disp[i] = 0;
         }
         else {
-            total_counters_disp[i] = total_counters_disp[i-1] + rcv_count_tcounters[i-1];
+            total_counters_disp[i] = total_counters_disp[i-1] + recvs_allFreq_ndWord[i-1];
         }
-        num_count += rcv_count_tcounters[i];
-        }
-    
-     /*
-    Preparazione parametri per l'array result_word, calcolo dei displecement e delle size
-    N.B: il master non partecipa al calcolo del displacement e della size quindi si pongono i relativi valori a 0
-    */ 
-    for (int i = 0; i < world_size; i++){
-        
-        rcv_count_rword[i] = recv_all_num_char[i];
+        num_count += recvs_allFreq_ndWord[i];
+    }
+
+        for (int i = 0; i < world_size; i++){
         //Il processo 0 setta i suoi parametri a 0 poichè non partecipa al calcolo del displacement e di size
         if(i == 0){
             result_word_disp[i] = 0;
         }
         else {
-            result_word_disp[i] = result_word_disp[i-1] + rcv_count_rword[i-1];
+            result_word_disp[i] = result_word_disp[i-1] + recv_all_num_char[i-1];
         }
-        num += rcv_count_rword[i];
+        num += recv_all_num_char[i];
         }
+    
+        /*Alloco spazio per gli array finali*/
+        result_word = malloc(sizeof(char)* num);
+        total_counters = malloc(sizeof(int)*num_count);
 
-        //[MASTER] -> Allocazione spazio per gli array in ricezione (dato che solo questi ultimi sono valorizzati lato MASTER)
-        if(rank == 0){
 
-            result_word = malloc(sizeof(char)* num);
-            total_counters = malloc(sizeof(int)*num_count);                
+        MPI_Bcast(&total_counters_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Bcast(&result_word_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
+        
     }
 
 
-    /*
-                                                                PARAMETRI GATHERV
-    histogram_word/counters: indirizzo iniziale del buffer di invio
-    readed_num_char: numero di elementi nel buffer di invio
-    MPI_CHAR: tipo di dati degli elementi del buffer di invio
-    result_word: indirizzo iniziale del buffer di ricezione
-    sec_size: array contenente il numero di elementi da ricevere da ciascun processo
-    ..._disp: array che specifica lo spostamento relativo a result_word/total_counters in cui posizionare i dati in ingresso
-    MPI_CHAR:tipo di dati del buffer di ricezione
-    0: rank del processo di ricezione
-    MPI_COMM_WORLD: comunicatore di gruppo
-    */
-
-    /*
-        Unisco gli istrogrammi locali(word + frequency) di ogni slave in due grandi array e li invio al master
-    */
-    MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,rcv_count_rword,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);//in result_word ho tutte le parole non duplicate in fila
-    MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,rcv_count_tcounters,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);//in total_counters ho il counter relativo ad ogni parola
-
+    MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,recv_all_num_char,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);
+    MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,recvs_allFreq_ndWord,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
     
-    //Libero la memoria allocata dagli sleve per histogram_word e per counters
-    if(rank != 0) {
+  if(rank != 0) {
         free(histogram_word);
         free(counters);    
     }
-
 
     /*
     -------------------------------------------------[MASTER] Merge finale degli istogrammi--------------------------------------------
@@ -643,7 +560,8 @@ Cosa fa il [MASTER]:
          Si -> incrementa la frequency di tale word
          No -> aggiunge la word all'istogramma, utilizzando il counter locale agli slave per quella parola
         */
-        for(int n = 0; n < num; n++){
+       for(int n = 0; n < num; n++){
+            //printf("%d\n",result_word[n]);
             if(result_word[n] == 0){
                 
                 addOrIncrWordInMaster(tmp_word,total_counters[count_parole]);//addOrIncrementWordInMaster è un metodo esclusivo del master, se il master ha già quella parola somma la sua occorrenza con quella dello slave, se non ce l'ha usa come conteggio quello rilevato dagli slave che hanno quella parola
@@ -651,7 +569,7 @@ Cosa fa il [MASTER]:
                 [DEBUG]: per vedere il counter associato ad ogni word
                 printf("%d\n",total_counters[count_parole]);
                 */
-                memset(tmp_word,0,100);//Una volta verificata la word resetto l'array tmp_word, e l'indice index_of_word_count
+               memset(tmp_word,0,100);//Una volta verificata la word resetto l'array tmp_word, e l'indice index_of_word_count
                 index_of_word_count = 0;
                 count_parole++;
             }
@@ -666,7 +584,7 @@ Cosa fa il [MASTER]:
         */
         pStruct = pStart;
         FILE *file;
-        file = fopen("result_word_count.csv","w+");
+        file = fopen("result_word_frequency.csv","w+");
 
         while(pStruct != NULL){
             fprintf(file,"WORD: %s --- FREQ: %d\n", returnWord(pStruct),returnWordFrequency(pStruct));
@@ -684,11 +602,11 @@ Cosa fa il [MASTER]:
     MPI_Barrier(MPI_COMM_WORLD);
     finish_time = MPI_Wtime();
 
+    /*Qui stampo il tempo finale di esecuzione*/
     if(rank == 0){
-        printf("Time:%f with %d processors\n",finish_time - start_time, world_size);
+        printf("Time %f with %d processors \n",finish_time - start_time,world_size);
         fflush(stdout);
     }
-
 
     MPI_Finalize();
     return 0;
