@@ -26,7 +26,6 @@ struct Word
     struct Word *pNext;
 };
 
-//this is a test
 
 //Variabile globale
 struct Word *pStart = NULL; 
@@ -326,7 +325,8 @@ Cosa fa il [MASTER]:
         memset(f_path,0,800);
         index_file++;//Se sono arrivato ad EOF ed ancora non ho terminato la mia partizione, inizio a leggere nel file successivo.
       }
-    } 
+    }
+
 
     /*
      ------------------------------------------------ FINE DEL LAVORO DEL [MASTER] SULLA SUA PARTIZIONE -------------------------------------
@@ -512,7 +512,7 @@ Cosa fa il [MASTER]:
         }
         else {
             total_counters_disp[i] = total_counters_disp[i-1] + recvs_allFreq_ndWord[i-1];
-            printf("%d\n",total_counters_disp[i]);
+            //printf("%d\n",total_counters_disp[i]);
         }
         num_count += recvs_allFreq_ndWord[i];
     }
@@ -524,6 +524,7 @@ Cosa fa il [MASTER]:
         }
         else {
             result_word_disp[i] = result_word_disp[i-1] + recv_all_num_char[i-1];
+            printf("%d\n",result_word_disp[i]);
         }
         num += recv_all_num_char[i];
         }
@@ -532,14 +533,16 @@ Cosa fa il [MASTER]:
         result_word = malloc(sizeof(char)* num);
         total_counters = malloc(sizeof(int)*num_count);
 
-        //Invio a tutti gli altri processi i displacement calcolati per i due array (result_word e total_counters)
-        MPI_Bcast(&total_counters_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
-        MPI_Bcast(&result_word_disp,world_size,MPI_INT,0,MPI_COMM_WORLD);
+        int size_tcount = sizeof(total_counters_disp)/sizeof(total_counters_disp[0]);
+        int size_rword = sizeof(result_word_disp)/sizeof(result_word_disp[0]);
+
+        MPI_Scatter(&total_counters_disp,size_tcount,MPI_INT,&total_counters_disp,size_tcount,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Scatter(&result_word_disp,size_rword,MPI_INT,&result_word_disp,size_rword,MPI_INT,0,MPI_COMM_WORLD);
         
     }
 
-    MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,recv_all_num_char,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);
-    MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,recvs_allFreq_ndWord,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Gatherv(histogram_word,readed_num_char,MPI_CHAR,result_word,recv_all_num_char,result_word_disp,MPI_CHAR,0,MPI_COMM_WORLD);
+        MPI_Gatherv(counters,readed_non_duplicate_words,MPI_INT,total_counters,recvs_allFreq_ndWord,total_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
     
 
     if(rank != 0) {
