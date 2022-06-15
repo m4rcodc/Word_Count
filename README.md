@@ -1,4 +1,4 @@
-# MPI WORD_COUNT PCPC PROJECT 2021/2002
+# MPI WORD_COUNT PCPC PROJECT 2021/2022
 
 |Studente|Matricola|Numero Progetto|
 |:---:|:---:|:---:|
@@ -151,7 +151,7 @@ A questo punto ogni processo ha generato il proprio istogramma locale ed è pron
 
 # Comunicazione degli istogrammi locali al MASTER
 
-Per consentire ad ogni processo slave di comunicare il proprio istogramma (linked list) al master, l'approccio che ho utilizzato è quello di inserire all'interno di un array abbastanza ampio l'insieme di tutte le parole rilevate da ciascun processo, ognuna di esse separata dal carattere \0. Lo stesso principio è stato applicato per le frequenze relative ad ogni parola, al fine di sincronizzare i due array nel processo master e dunque riuscire a ricostruire la linked list.
+Per consentire ad ogni processo slave di comunicare il proprio istogramma (linked list) al master, l'approccio che ho utilizzato è quello di inserire all'interno di un array l'insieme di tutte le parole rilevate da ciascun processo, ognuna di esse separata dal carattere \0. Lo stesso principio è stato applicato per le frequenze relative ad ogni parola, al fine di sincronizzare i due array nel processo master e dunque riuscire a ricostruire la linked list.
 
 ```
 //Array contenente le frequenze associate a ciascuna word
@@ -170,33 +170,40 @@ pStruct = pStart;
 histogram_word = calloc(readed_num_char,sizeof(char));
 
 ```
-Ora possiamo iniziare la comunicazione con il master, per fare ciò ho utilizzato una Gatherv, per la quale ho calcolato i due parametri necessari a questa funzione, i displacement e la size, sia per l'array counters delle frequenze, sia per l'array histogram_word per le parole.
+Ora possiamo iniziare la comunicazione con il master. Per fare ciò ho utilizzato la primitiva di comunicazione Gatherv, per la quale il processo MASTER calcola i due parametri necessari a questa funzione,i displacement e la size, sia per l'array counters delle frequenze, sia per l'array histogram_word per le parole, per poi inviarli a tutti gli altri processi slave attraverso la primitiva Scatter.
 N.B. il master non partecipa al calcolo dei due parametri, quindi quest'ultimi sono stati settati a 0.
 
 ```
+if(rank == 0){
+
 for (int i = 0; i < world_size; i++){
-        
-        rcv_count_tcounters[i] = recvs_allFreq_ndWord[i];
+
         if(i == 0){
             total_counters_disp[i] = 0;
         }
         else {
-            total_counters_disp[i] = total_counters_disp[i-1] + rcv_count_tcounters[i-1];
+            total_counters_disp[i] = total_counters_disp[i-1] + recvs_allFreq_ndWord[i-1];
         }
-        num_count += rcv_count_tcounters[i];
-        }
+        num_count += recvs_allFreq_ndWord[i];
+    }
 
-for (int i = 0; i < world_size; i++){
-        
-        rcv_count_rword[i] = recv_all_num_char[i];
+        for (int i = 0; i < world_size; i++){
         if(i == 0){
             result_word_disp[i] = 0;
         }
         else {
-            result_word_disp[i] = result_word_disp[i-1] + rcv_count_rword[i-1];
+            result_word_disp[i] = result_word_disp[i-1] + recv_all_num_char[i-1];
         }
-        num += rcv_count_rword[i];
+        num += recv_all_num_char[i];
         }
+
+        int size_tcount = sizeof(total_counters_disp)/sizeof(total_counters_disp[0]);
+        int size_rword = sizeof(result_word_disp)/sizeof(result_word_disp[0]);
+
+        MPI_Scatter(&total_counters_disp,size_tcount,MPI_INT,&total_counters_disp,size_tcount,MPI_INT,0,MPI_COMM_WORLD);
+        MPI_Scatter(&result_word_disp,size_rword,MPI_INT,&result_word_disp,size_rword,MPI_INT,0,MPI_COMM_WORLD);
+
+  }      
 
 ```
 Ora può avere inizio la comunicazione:
@@ -216,7 +223,7 @@ for(int n = 0; n < num; n++){
           if(result_word[n] == 0){
                 
             addOrIncrWordInMaster(tmp_word,total_counters[count_parole]);
-            memset(tmp_word,0,100);//Una volta verificata la word resetto l'array tmp_word, e l'indice index_of_word_count
+            memset(tmp_word,0,100);
             index_of_word_count = 0;
             count_parole++;
             }
@@ -228,14 +235,14 @@ for(int n = 0; n < num; n++){
         }
 
 ```
-Il metodo addOrIncrementInMaster prende in input una parola e capisce se il master la possiede già all'interno del suo istogramma, se è cosi allora somma la sua frequenza relativa a quella parola con quella dello slave, prelevando la frequenza dall'array dei conteggi. Viceversa, se il MASTER non possiede la parola, la deve aggiungere al proprio istogramma inserendo come frequenza quella rilevata localmente dagli slave.
+Il metodo addOrIncrementInMaster prende in input una parola e capisce se il master la possiede già all'interno del suo istogramma, se è cosi allora somma la sua frequenza relativa a quella parola con quella dello slave, prelevando la frequenza dall'array dei conteggi. Viceversa, se il MASTER non possiede la parola, la deve aggiungere al proprio istogramma inserendo come frequenza quella rilevata localmente dagli slave nei loro istogrammi locali.
 
 
 # Correttezza
 
 Per dimostrare la correttezza dell'algoritmo sono state effettuate tre esecuzioni, dove in ognuna di esse è stato cambiato il numero di processi coinvolti. Come si può osservare dalle immagini sottostanti, nonostante la variazione del numero di processi vengono prodotti sempre gli stessi risultati.
 
-*File di input - Numero Processi = 1*          | *File di output - Numero Processi = 1*
+*File di input - Numero Processi = 1*          | *File di output - Numero Processi = 2*
 :-------------------------:|:-------------------------:
 ![inFile](Correttezza/Input1Processo.png)      | ![outFile](Correttezza/Output1Processo.png)
 
@@ -249,9 +256,9 @@ Per dimostrare la correttezza dell'algoritmo sono state effettuate tre esecuzion
 
 # Benchmarking
 
-L'algoritmo è stato testato in termini di **strong scalability** e **weak scalability** su **Google Cloud Platform** su un cluster di 6 macchine **e2-standard-4**, ognuna dotata di 4 vCPUs e 16GB di memoria RAM, quindi per un totale di 24 vCPUs.
+L'algoritmo è stato testato in termini di **strong scalability** e **weak scalability** su **Google Cloud Platform** su un cluster di 6 macchine **e2-standard-4**, ognuna dotata di 4 vCPUs, quindi per un totale di 24 vCPUs.
 
-⚠️ **IMPORTANTE: il tempo rappresentato all'interno dei grafici sottostanti non considera la parte intera, che è pari a 0 per ogni risultato otteuto**
+⚠️ **IMPORTANTE: il tempo rappresentato all'interno dei grafici sottostanti non considera la parte intera, che è pari a 0 per ogni risultato ottenuto**
 
 # Strong Scalability - 500k words
 
@@ -286,7 +293,7 @@ L'algoritmo è stato testato in termini di **strong scalability** e **weak scala
 ![Strong.png](Benchmark/Strong.png)
 
 
-Il benchmark mostra che più processi vengoo utilizzati, minore è il tempo necessario per completare il task. Da un certo punto in poi la riduzione del tempo di esecuzione inizia a diminuire, in particolare da 18 processi in su inizia a risalire, il chè significa che la velocità dell'algoritmo non riesce a sopperire l'overhead causato dalla comunicazione tra i vari processi.
+Il benchmark mostra che più processi vengoo utilizzati, minore è il tempo necessario per completare il task. Da un certo punto in poi la riduzione del tempo di esecuzione inizia a diminuire, in particolare da 18 processi in su inizia a risalire, il chè significa che l'algoritmo inizia a perdere di efficienza, principalmente per l'overhead causato dalle comunicazioni tra i vari processi.
 
 # Weak Scalability
 
@@ -322,6 +329,12 @@ Le parole in input a ciascun processo hanno un rapporto di 15000:1.
 ![Weak.png](Benchmark/Weak.png)
 
 Come si può evincere dai risultati raccolti, il tempo di esecuzione aumenta (anche se di poco) costantemente all'aumentare del numero dei processori.
+
+# Commento dei risultati ottenuti
+
+Come si può notare dalle tabelle riassuntive e dai grafici, lo speed-up con l'utilizzo di 2 processori è quello che più si avvicina allo speed-up ideale. Questo significa che in queste condizioni l'algoritmo parallelo è più veloce in rapporto alle risorse utilizzate (in termini di comunicazione) e quindi più efficiente.
+All'aumentare del numero dei processori lo speed-up si allontana sempre più da quello ideale comportando, quindi, una perdita di efficienza. 
+Nonostante aumenti il numero di processori a disposizione il parallelismo dell'algoritmo non viene sfruttato a pieno.
 
 # Istruzioni per l'esecuzione
 
