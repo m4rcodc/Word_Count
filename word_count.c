@@ -264,11 +264,11 @@ Cosa fa il [MASTER]:
     //Send
     for(int i = 1; i < world_size; i++){
 
-        MPI_Isend(&numberOfFile,1,MPI_INT,i,99,MPI_COMM_WORLD,&request);
-        MPI_Isend(file_name,sizeof(file_name)/sizeof(file_name[0][0]),MPI_CHAR,i,0,MPI_COMM_WORLD,&request);
-        MPI_Isend(number_of_word,sizeof(number_of_word)/sizeof(number_of_word[0]),MPI_INT,i,1,MPI_COMM_WORLD,&request);
-        MPI_Isend(&partition,1,MPI_INT,i,2,MPI_COMM_WORLD,&request);
-        MPI_Isend(&resto,1,MPI_INT,i,3,MPI_COMM_WORLD,&request);
+        MPI_Send(&numberOfFile,1,MPI_INT,i,99,MPI_COMM_WORLD);
+        MPI_Send(file_name,sizeof(file_name)/sizeof(file_name[0][0]),MPI_CHAR,i,0,MPI_COMM_WORLD);
+        MPI_Send(number_of_word,sizeof(number_of_word)/sizeof(number_of_word[0]),MPI_INT,i,1,MPI_COMM_WORLD);
+        MPI_Send(&partition,1,MPI_INT,i,2,MPI_COMM_WORLD);
+        MPI_Send(&resto,1,MPI_INT,i,3,MPI_COMM_WORLD);
 
     }
 
@@ -527,7 +527,7 @@ Cosa fa il [MASTER]:
         global_counters = malloc(sizeof(int) * num_count);
         
     }
-
+    
         //Comunicazione finale
         MPI_Gatherv(local_histogram,n_char,MPI_CHAR,global_histogram,recv_n_char,global_histogram_disp,MPI_CHAR,0,MPI_COMM_WORLD);
         MPI_Gatherv(local_counters,n_words,MPI_INT,global_counters,recvs_counts,global_counters_disp,MPI_INT,0,MPI_COMM_WORLD);
