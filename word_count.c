@@ -355,7 +355,6 @@ Cosa fa il [MASTER]:
         MPI_Recv(&partition,1,MPI_INT,0,2,MPI_COMM_WORLD,&status);
         MPI_Recv(&resto,1,MPI_INT,0,3,MPI_COMM_WORLD,&status);
         
-
         //Gestione del resto per i processi slave, aggiungo il resto in base all'ordine dei rank, ad esempio se ho resto=2 -> il processo di rank 0 aggiunge 1 alla sua partition, il processo di rank 1 aggiunge 1 alla sua partition, il processo di rank 2 non aggiungerà niente e cosi via
         if(resto != 0){
             if(rank < resto){
@@ -381,6 +380,7 @@ Cosa fa il [MASTER]:
                 if((cum_sum > lw_bound) && (partition > 0)){
                     strcpy(path_file,"file_test/");
                     strcat(path_file,file_name[i]);
+                    printf("%s\n",path_file);
                     file = fopen(path_file,"r");
                     if(file == NULL){
                         perror("Unable to open file");
