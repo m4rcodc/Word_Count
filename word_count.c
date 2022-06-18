@@ -207,7 +207,7 @@ Cosa fa il [MASTER]:
         */
 
         int number_of_word[numberOfFile];//Countero il numero di parole per ogni file
-        char file_name[numberOfFile][100];//Ogni riga dell'array bidimensionale è un array di char di dimensione 100
+        char file_name[numberOfFile][100];
         int while_counter = 0;
 
         /*
@@ -223,10 +223,8 @@ Cosa fa il [MASTER]:
                 if(strcmp(dir->d_name,".") != 0 && strcmp(dir->d_name,"..") != 0){
                     strcpy(path_file,"file_test/");
                     strcat(path_file,dir->d_name);
-                    //Salvo man mano all'interno dell'array i nomi dei file
                     strcpy(file_name[while_counter],dir->d_name);
                     
-                    //Apro ogni file in lettura
                     fp = fopen(path_file,"r");
 
                     if(fp == NULL){
@@ -355,7 +353,12 @@ Cosa fa il [MASTER]:
         MPI_Recv(&partition,1,MPI_INT,0,2,MPI_COMM_WORLD,&status);
         MPI_Recv(&resto,1,MPI_INT,0,3,MPI_COMM_WORLD,&status);
         
-        //Gestione del resto per i processi slave, aggiungo il resto in base all'ordine dei rank, ad esempio se ho resto=2 -> il processo di rank 0 aggiunge 1 alla sua partition, il processo di rank 1 aggiunge 1 alla sua partition, il processo di rank 2 non aggiungerà niente e cosi via
+        /*
+        Divido il resto in base al rank dei processi
+        if resto == 2 
+        Rank 0 -> partition + 1 (fatto in precedenza)
+        Rank 1 -> partition + 1
+        */
         if(resto != 0){
             if(rank < resto){
                 lw_bound = (partition + 1) * rank;
@@ -371,7 +374,7 @@ Cosa fa il [MASTER]:
         //size -> numero di file
         int size = sizeof(number_of_word)/sizeof(number_of_word[0]);
 
-        //Ciclo in ogni file, salvando all'interno di cum_sum as ogni iterazione il numero di word presenti in ognuno dei file
+        //Ciclo in ogni file
         for(int i=0; i < size; i++){
 
                 cum_sum += number_of_word[i];//Somma delle parole in ogni file
@@ -399,7 +402,8 @@ Cosa fa il [MASTER]:
                     //Inizio lettura      
                     while((ch = fgetc(file)) != EOF){
                         if(isalnum(ch)!=0){
-                            if(word_counter >= start_to_read){//Arrivo al punto da cui deo iniziare a leggere
+                            //Arrivo al punto da cui devo iniziare a leggere
+                            if(word_counter >= start_to_read){
                                 temporary_word[index_of_tmpword] = ch;
                                 index_of_tmpword++;      
                             }
@@ -407,7 +411,7 @@ Cosa fa il [MASTER]:
                         else {
                             if(ch == ' ' || ch == '\t' || ch == '\n'){
                                 word_counter++;
-                                //Dal momento in cui lo slave arriva al punto da cui deve iniziare a leggere, per ogni parola letta decrementa la sua partizione
+                                //Arrivo al punto da cui devo iniziare a leggere
                                 if(word_counter > start_to_read){
                                     partition--;
                                     temporary_word[index_of_tmpword] = '\0';
@@ -435,7 +439,7 @@ Cosa fa il [MASTER]:
         local_counters = malloc(sizeof(int)* n_words);
 
 
-        //Calcolo della grandezza dell'istogramma in termini di caratteri presenti al suo interno.
+        //Alloco spazio per local_histogram
         pStruct = pStart;
         while(pStruct != NULL){
             n_char += lengthOfCurrentWord(pStruct);
@@ -472,6 +476,7 @@ Cosa fa il [MASTER]:
             
         }
 
+
         //Dealloco lo spazio allocato in precedenza per l'istogramma [PER OGNI SLAVE]
         pStruct = pStart;
         while(pStruct != NULL)
@@ -481,6 +486,8 @@ Cosa fa il [MASTER]:
             pStruct = pStruct->pNext;
             free(pStart);
         }
+
+
        
     }
 
@@ -555,6 +562,8 @@ Cosa fa il [MASTER]:
          No -> aggiunge la word all'istogramma, utilizzando il counter locale agli slave per quella parola
         */
        for(int n = 0; n < num; n++){
+            
+            //printf("%c\n",global_histogram[n]);
 
             if(global_histogram[n] == 0){
                 
